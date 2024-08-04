@@ -5,7 +5,7 @@
 #include <VkBootstrap.h>
 #include <spdlog/spdlog.h>
 
-#include "engine/bootstrap.hpp"
+#include "engine/rendering.hpp"
 
 using namespace b;
 
@@ -14,8 +14,12 @@ int main(void) {
   bootstrap.init();
   engine::GLFWwindow_show(bootstrap.window);
 
+  engine::RenderData render_data;
+  render_data.init(bootstrap);
+
   while (!glfwWindowShouldClose(bootstrap.window)) {
     glfwPollEvents();
+    render_data.draw_frame(bootstrap);
   }
 
   return 0;

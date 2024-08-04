@@ -44,7 +44,7 @@ struct BootstrapInfo {
   vkb::Device device;
   vkb::DispatchTable dispatch;
   vkb::Swapchain swapchain;
-  
+
   VkSurfaceKHR create_surface() {
     ASSERT(instance != VK_NULL_HANDLE,
            "The instance has not been initialized yet. Try initializing the "
