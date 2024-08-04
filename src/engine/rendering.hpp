@@ -13,9 +13,13 @@ struct FrameData {
   VkImage swapchain_image;
   VkImageView swapchain_image_view;
   VkFramebuffer framebuffer;
+  VkCommandBuffer command_buffer;
+  VkFence image_in_flight;
+};
+
+struct FrameInFlight {
   VkSemaphore available_semaphore, finished_semaphore;
   VkFence in_flight_fence;
-  VkCommandBuffer command_buffer;
 };
 
 VkShaderModule create_shader_module(BootstrapInfo &bootstrap,
@@ -49,6 +53,7 @@ struct RenderData {
   VkCommandPool command_pool;
 
   std::vector<FrameData> frames;
+  std::vector<FrameInFlight> frames_in_flight;
 
   size_t current_frame = 0;
 
@@ -241,22 +246,13 @@ struct RenderData {
   }
 
   void init_frame_data(BootstrapInfo &bootstrap) {
-    MAX_FRAMES_IN_FLIGHT = bootstrap.swapchain.image_count;
-
     frames.clear();
-    frames.resize(MAX_FRAMES_IN_FLIGHT);
+    frames.resize(bootstrap.swapchain.image_count);
 
     auto images = bootstrap.swapchain.get_images().value();
     auto image_views = bootstrap.swapchain.get_image_views().value();
 
-    VkSemaphoreCreateInfo semaphore_create = {};
-    semaphore_create.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
-    VkFenceCreateInfo fence_create = {};
-    fence_create.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    fence_create.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-
-    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    for (size_t i = 0; i < bootstrap.swapchain.image_count; i++) {
       FrameData frame_data;
 
       frame_data.swapchain_image = images[i];
@@ -274,13 +270,35 @@ struct RenderData {
       CHECK_VK(bootstrap.dispatch.createFramebuffer(
           &framebuffer_create_info, NULL, &frame_data.framebuffer));
 
-      CHECK_VK(bootstrap.dispatch.createSemaphore(
-          &semaphore_create, NULL, &frame_data.finished_semaphore));
-      CHECK_VK(bootstrap.dispatch.createSemaphore(
-          &semaphore_create, NULL, &frame_data.available_semaphore));
-      CHECK_VK(bootstrap.dispatch.createFence(&fence_create, NULL,
-                                              &frame_data.in_flight_fence));
+      frame_data.image_in_flight = VK_NULL_HANDLE;
+
       frames[i] = frame_data;
+    }
+  }
+
+  void init_frames_in_flight(BootstrapInfo &bootstrap) {
+    // TODO: cleanup
+    frames_in_flight.clear();
+    frames_in_flight.resize(MAX_FRAMES_IN_FLIGHT);
+
+    VkSemaphoreCreateInfo semaphore_create = {};
+    semaphore_create.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+    VkFenceCreateInfo fence_create = {};
+    fence_create.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    fence_create.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+    for (size_t i = 0; i < frames_in_flight.size(); i++) {
+      FrameInFlight finf;
+
+      CHECK_VK(bootstrap.dispatch.createSemaphore(&semaphore_create, NULL,
+                                                  &finf.finished_semaphore));
+      CHECK_VK(bootstrap.dispatch.createSemaphore(&semaphore_create, NULL,
+                                                  &finf.available_semaphore));
+      CHECK_VK(bootstrap.dispatch.createFence(&fence_create, NULL,
+                                              &finf.in_flight_fence));
+
+      frames_in_flight[i] = finf;
     }
   }
 
@@ -308,6 +326,8 @@ struct RenderData {
     for (uint32_t i = 0; i < command_buffers.size(); i++) {
       VkCommandBufferBeginInfo begin_info = {};
       begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+      // XXX: fixes validation layers screaming when resizing, needs further investigation
+      begin_info.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
 
       CHECK_VK(bootstrap.dispatch.beginCommandBuffer(command_buffers[i],
                                                      &begin_info));
@@ -354,58 +374,55 @@ struct RenderData {
   }
 
   void draw_frame(BootstrapInfo &bootstrap) {
-    bootstrap.dispatch.waitForFences(1, &frames[current_frame].in_flight_fence,
-                                     VK_TRUE, UINT64_MAX);
+    bootstrap.dispatch.waitForFences(
+        1, &frames_in_flight[current_frame].in_flight_fence, VK_TRUE,
+        UINT64_MAX);
 
     uint32_t image_index = 0;
-    VkResult result = bootstrap.dispatch.acquireNextImageKHR(
+    CHECK_VK(bootstrap.dispatch.acquireNextImageKHR(
         bootstrap.swapchain, UINT64_MAX,
-        frames[current_frame].available_semaphore, VK_NULL_HANDLE,
-        &image_index);
+        frames_in_flight[current_frame].available_semaphore, VK_NULL_HANDLE,
+        &image_index));
 
-    if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-      exit(-2);
-    } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
-      std::cout << "failed to acquire swapchain image. Error " << result
-                << "\n";
-      return;
+    if (frames[image_index].image_in_flight != VK_NULL_HANDLE) {
+      bootstrap.dispatch.waitForFences(
+          1, &frames[image_index].image_in_flight, VK_TRUE,
+          UINT64_MAX);
     }
 
-    if (frames[image_index].in_flight_fence != VK_NULL_HANDLE) {
-      bootstrap.dispatch.waitForFences(1, &frames[image_index].in_flight_fence,
-                                       VK_TRUE, UINT64_MAX);
-    }
-
-    frames[image_index].in_flight_fence = frames[current_frame].in_flight_fence;
+    frames[image_index].image_in_flight =
+        frames_in_flight[current_frame].in_flight_fence;
 
     VkSubmitInfo submitInfo = {};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
-    VkSemaphore wait_semaphores[] = {frames[current_frame].available_semaphore};
     VkPipelineStageFlags wait_stages[] = {
         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
     submitInfo.waitSemaphoreCount = 1;
-    submitInfo.pWaitSemaphores = wait_semaphores;
+    submitInfo.pWaitSemaphores =
+        &frames_in_flight[current_frame].available_semaphore;
     submitInfo.pWaitDstStageMask = wait_stages;
 
     submitInfo.commandBufferCount = 1;
     submitInfo.pCommandBuffers = &frames[image_index].command_buffer;
 
-    VkSemaphore signal_semaphores[] = {
-        frames[current_frame].finished_semaphore};
     submitInfo.signalSemaphoreCount = 1;
-    submitInfo.pSignalSemaphores = signal_semaphores;
+    submitInfo.pSignalSemaphores =
+        &frames_in_flight[current_frame].finished_semaphore;
 
-    bootstrap.dispatch.resetFences(1, &frames[current_frame].in_flight_fence);
+    bootstrap.dispatch.resetFences(
+        1, &frames_in_flight[current_frame].in_flight_fence);
 
     CHECK_VK(bootstrap.dispatch.queueSubmit(
-        graphics_queue, 1, &submitInfo, frames[current_frame].in_flight_fence));
+        graphics_queue, 1, &submitInfo,
+        frames_in_flight[current_frame].in_flight_fence));
 
     VkPresentInfoKHR present_info = {};
     present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 
     present_info.waitSemaphoreCount = 1;
-    present_info.pWaitSemaphores = signal_semaphores;
+    present_info.pWaitSemaphores =
+        &frames_in_flight[current_frame].finished_semaphore;
 
     VkSwapchainKHR swapChains[] = {bootstrap.swapchain};
     present_info.swapchainCount = 1;
@@ -413,8 +430,7 @@ struct RenderData {
 
     present_info.pImageIndices = &image_index;
 
-    CHECK_VK(
-        bootstrap.dispatch.queuePresentKHR(present_queue, &present_info));
+    CHECK_VK(bootstrap.dispatch.queuePresentKHR(present_queue, &present_info));
 
     current_frame = (current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
   }
@@ -424,6 +440,7 @@ struct RenderData {
     init_render_pass(bootstrap);
     init_graphics_pipeline(bootstrap);
     init_frame_data(bootstrap);
+    init_frames_in_flight(bootstrap);
     init_command_pool(bootstrap);
 
     write_command_buffer(bootstrap);
