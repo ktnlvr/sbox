@@ -424,28 +424,28 @@ struct RenderData {
     frames[image_index].image_in_flight =
         frames_in_flight[current_frame].in_flight_fence;
 
-    VkSubmitInfo submitInfo = {};
-    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    VkSubmitInfo submit_info = {};
+    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
     VkPipelineStageFlags wait_stages[] = {
         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-    submitInfo.waitSemaphoreCount = 1;
-    submitInfo.pWaitSemaphores =
+    submit_info.waitSemaphoreCount = 1;
+    submit_info.pWaitSemaphores =
         &frames_in_flight[current_frame].available_semaphore;
-    submitInfo.pWaitDstStageMask = wait_stages;
+    submit_info.pWaitDstStageMask = wait_stages;
 
-    submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &frames[image_index].command_buffer;
+    submit_info.commandBufferCount = 1;
+    submit_info.pCommandBuffers = &frames[image_index].command_buffer;
 
-    submitInfo.signalSemaphoreCount = 1;
-    submitInfo.pSignalSemaphores =
+    submit_info.signalSemaphoreCount = 1;
+    submit_info.pSignalSemaphores =
         &frames_in_flight[current_frame].finished_semaphore;
 
     CHECK_VK(bootstrap.dispatch.resetFences(
         1, &frames_in_flight[current_frame].in_flight_fence));
 
     CHECK_VK(bootstrap.dispatch.queueSubmit(
-        graphics_queue, 1, &submitInfo,
+        graphics_queue, 1, &submit_info,
         frames_in_flight[current_frame].in_flight_fence));
 
     VkPresentInfoKHR present_info = {};
