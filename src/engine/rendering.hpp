@@ -317,9 +317,10 @@ struct RenderData {
                                                   &command_pool));
   }
 
-  void write_command_buffer(BootstrapInfo &bootstrap, ImDrawData* imgui_draw_data) {
-    // XXX: don't write ImGUI's data to each buffer every time 
-  
+  void write_command_buffer(BootstrapInfo &bootstrap,
+                            ImDrawData *imgui_draw_data = nullptr) {
+    // XXX: don't write ImGUI's data to each buffer every time
+
     VkCommandBufferAllocateInfo alloc_info = {};
     alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     alloc_info.commandPool = command_pool;
@@ -373,7 +374,9 @@ struct RenderData {
 
       bootstrap.dispatch.cmdDraw(command_buffers[i], 3, 1, 0, 0);
 
-      ImGui_ImplVulkan_RenderDrawData(imgui_draw_data, command_buffers[i]);
+      // TODO: fix imgui
+      if (false)
+        ImGui_ImplVulkan_RenderDrawData(imgui_draw_data, command_buffers[i]);
 
       bootstrap.dispatch.cmdEndRenderPass(command_buffers[i]);
 
@@ -383,16 +386,41 @@ struct RenderData {
     }
   }
 
+  void recreate_swapchain(BootstrapInfo &bootstrap) {
+    bootstrap.dispatch.deviceWaitIdle();
+    bootstrap.dispatch.destroyCommandPool(command_pool, nullptr);
+
+    std::vector<VkImageView> image_views;
+    for (auto &frame : frames) {
+      bootstrap.dispatch.destroyFramebuffer(frame.framebuffer, nullptr);
+      image_views.push_back(frame.swapchain_image_view);
+    }
+
+    bootstrap.swapchain.destroy_image_views(image_views);
+
+    bootstrap.init_swapchain();
+    init_frame_data(bootstrap);
+    init_command_pool(bootstrap);
+    write_command_buffer(bootstrap);
+  }
+
   void draw_frame(BootstrapInfo &bootstrap) {
     bootstrap.dispatch.waitForFences(
         1, &frames_in_flight[current_frame].in_flight_fence, VK_TRUE,
         UINT64_MAX);
 
     uint32_t image_index = 0;
-    CHECK_VK(bootstrap.dispatch.acquireNextImageKHR(
+    VkResult result = bootstrap.dispatch.acquireNextImageKHR(
         bootstrap.swapchain, UINT64_MAX,
         frames_in_flight[current_frame].available_semaphore, VK_NULL_HANDLE,
-        &image_index));
+        &image_index);
+
+    if (result == VK_ERROR_OUT_OF_DATE_KHR && result != VK_SUBOPTIMAL_KHR) {
+      recreate_swapchain(bootstrap);
+      return;
+    } else {
+      CHECK_VK(result);
+    }
 
     if (frames[image_index].image_in_flight != VK_NULL_HANDLE) {
       bootstrap.dispatch.waitForFences(1, &frames[image_index].image_in_flight,
@@ -439,7 +467,12 @@ struct RenderData {
 
     present_info.pImageIndices = &image_index;
 
-    CHECK_VK(bootstrap.dispatch.queuePresentKHR(present_queue, &present_info));
+    result = bootstrap.dispatch.queuePresentKHR(present_queue, &present_info);
+
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+      recreate_swapchain(bootstrap);
+      return;
+    }
 
     current_frame = (current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
   }
