@@ -69,26 +69,30 @@ struct BootstrapInfo {
     instance_builder.request_validation_layers()
         .set_app_name("Sandbox")
         .set_engine_name("Sandbox Vulkan Engine")
-        .require_api_version(1, 0, 0)
+        .require_api_version(1, 2, 0)
         .set_debug_callback(
             [](VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
                VkDebugUtilsMessageTypeFlagsEXT _messageType,
                const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
                void *_pUserData) -> VkBool32 {
               // TODO: propert severity handling
-              if (messageSeverity >=
+              if (messageSeverity ==
                   VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
+                spdlog::warn(pCallbackData->pMessage);
+              } else if (messageSeverity >=
+                         VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
+                spdlog::error(pCallbackData->pMessage);
+              } else {
                 spdlog::info(pCallbackData->pMessage);
               }
               return VK_FALSE;
             });
 
-    auto instance_ret = instance_builder.build();
+    auto system_info = vkb::SystemInfo::get_system_info();
+    CHECK(system_info);
 
-    if (!instance_ret) {
-      spdlog::error(instance_ret.error().message());
-      return;
-    }
+    auto instance_ret = instance_builder.build();
+    CHECK(instance_ret);
 
     instance = instance_ret.value();
     instance_dispatch = instance.make_table();
@@ -98,47 +102,23 @@ struct BootstrapInfo {
     auto physical_device_ret =
         physical_device_selector.set_surface(surface).select(
             vkb::DeviceSelectionMode::only_fully_suitable);
-
-    if (!physical_device_ret) {
-      spdlog::error(physical_device_ret.error().message());
-      return;
-    }
-
+    CHECK(physical_device_ret);
     physical_device = physical_device_ret.value();
+
     vkb::DeviceBuilder device_builder(physical_device);
     auto device_ret = device_builder.build();
-    if (!device_ret) {
-      spdlog::error(device_ret.error().message());
-      return;
-    }
-
+    CHECK(device_ret);
     device = device_ret.value();
+
     dispatch = device.make_table();
   }
 
   void init_swapchain() {
     vkb::SwapchainBuilder swapchain_builder(device);
     auto swapchain_ret = swapchain_builder.set_old_swapchain(swapchain).build();
-    if (!swapchain_ret) {
-      spdlog::error(swapchain_ret.error().message());
-      return;
-    }
+    CHECK(swapchain_ret);
     vkb::destroy_swapchain(swapchain);
     swapchain = swapchain_ret.value();
-  }
-
-  void init_queues() {
-    auto gq_ret = device.get_queue(vkb::QueueType::graphics);
-    if (!gq_ret) {
-      spdlog::error(gq_ret.error().message());
-      return;
-    }
-
-    auto pq_ret = device.get_queue(vkb::QueueType::present);
-    if (!pq_ret) {
-      spdlog::error(pq_ret.error().message());
-      return;
-    }
   }
 
   void init() {
