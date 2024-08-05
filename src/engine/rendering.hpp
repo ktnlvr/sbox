@@ -10,7 +10,11 @@
 
 #include "bootstrap.hpp"
 
+#include "vertex.hpp"
+
 namespace b::engine {
+
+static Mesh* mesh;
 
 struct FrameData {
   VkImage swapchain_image;
@@ -135,11 +139,21 @@ struct RenderData {
     VkPipelineShaderStageCreateInfo shader_stages[] = {vert_stage_info,
                                                        frag_stage_info};
 
+    auto binding_description = Vertex::binding_description();
+    auto attribute_descriptions = Vertex::attribute_descriptions();
+
     VkPipelineVertexInputStateCreateInfo vertex_input_info = {};
     vertex_input_info.sType =
         VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
     vertex_input_info.vertexBindingDescriptionCount = 0;
     vertex_input_info.vertexAttributeDescriptionCount = 0;
+
+    vertex_input_info.vertexBindingDescriptionCount = 1;
+    vertex_input_info.vertexAttributeDescriptionCount =
+        attribute_descriptions.size();
+    vertex_input_info.pVertexBindingDescriptions = &binding_description;
+    vertex_input_info.pVertexAttributeDescriptions =
+        attribute_descriptions.data();
 
     VkPipelineInputAssemblyStateCreateInfo input_assembly = {};
     input_assembly.sType =
@@ -365,6 +379,11 @@ struct RenderData {
 
       bootstrap.dispatch.cmdBindPipeline(
           command_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+
+      VkBuffer vertex_buffers[] = {mesh->vert_buffer};
+      VkDeviceSize offsets[] = {0};
+      bootstrap.dispatch.cmdBindVertexBuffers(command_buffers[i], 0, 1,
+                                              vertex_buffers, offsets);
 
       bootstrap.dispatch.cmdDraw(command_buffers[i], 3, 1, 0, 0);
 

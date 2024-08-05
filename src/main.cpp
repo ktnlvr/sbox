@@ -5,6 +5,7 @@
 #include <VkBootstrap.h>
 #include <spdlog/spdlog.h>
 
+#include "engine/library.hpp"
 #include "engine/rendering.hpp"
 
 using namespace b;
@@ -16,6 +17,13 @@ int main(void) {
 
   engine::RenderData render_data;
   render_data.init(bootstrap);
+
+  engine::Library library;
+  auto mesh =
+      library.add_mesh(bootstrap, std::vector(engine::TRIANGLE_VERTS.cbegin(),
+                                              engine::TRIANGLE_VERTS.cend()));
+  engine::mesh = &mesh;
+
   render_data.write_command_buffer(bootstrap, nullptr);
 
   while (!glfwWindowShouldClose(bootstrap.window)) {

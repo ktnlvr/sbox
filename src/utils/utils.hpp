@@ -8,6 +8,13 @@
     spdlog::error("{}:{} {}", __FILE__, __LINE__, #expr);                      \
     exit(-2);                                                                  \
   }
+
+#define CHECK_FMT(expr, ...)                                                   \
+  if (!(expr)) {                                                               \
+    spdlog::error("{}:{} {}", __FILE__, __LINE__, #expr);                      \
+    exit(-2);                                                                  \
+  }
+
 #define CHECK_VK(expr)                                                         \
   [&]() {                                                                      \
     VkResult result##__LINE__ = expr;                                          \
@@ -21,4 +28,4 @@
                    string_VkResult(result##__LINE__));                         \
     }                                                                          \
   }()
-#define ASSERT(expr, ...)
+#define PANIC(...) spdlog::error("{}:{} ", __FILE__, __LINE__, __VA_ARGS__)

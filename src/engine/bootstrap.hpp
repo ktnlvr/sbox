@@ -46,10 +46,10 @@ struct BootstrapInfo {
   vkb::Swapchain swapchain;
 
   VkSurfaceKHR create_surface() {
-    ASSERT(instance != VK_NULL_HANDLE,
+    CHECK_FMT(instance != VK_NULL_HANDLE,
            "The instance has not been initialized yet. Try initializing the "
            "instance before surface creation");
-    ASSERT(window != nullptr, "The window has not been created yet. Did GLFW "
+    CHECK_FMT(window != nullptr, "The window has not been created yet. Did GLFW "
                               "return an error upon window creation?");
 
     // TODO: check that instance and swapchain are correct
@@ -119,6 +119,20 @@ struct BootstrapInfo {
     CHECK(swapchain_ret);
     vkb::destroy_swapchain(swapchain);
     swapchain = swapchain_ret.value();
+  }
+
+  uint32_t find_memory(uint32_t type_filter, VkMemoryPropertyFlags properties) {
+    auto mem = physical_device.memory_properties;
+    for (size_t i = 0; i < mem.memoryTypeCount; i++) {
+      // MAGIC: check the docs
+      if ((type_filter & (1 << i)) &&
+          ((mem.memoryTypes[i].propertyFlags & properties) == properties)) {
+        return i;
+      }
+    }
+
+    PANIC("Requested memory type not found");
+    return -1;
   }
 
   void init() {

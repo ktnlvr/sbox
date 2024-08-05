@@ -23,5 +23,9 @@ target_link_libraries(sbox glfw)
 add_subdirectory(external/vk-bootstrap)
 target_link_libraries(sbox vk-bootstrap)
 
+add_subdirectory(external/glm)
+target_link_libraries(sbox glm)
+
 target_include_directories(sbox PRIVATE external/vk-bootstrap/src)
+target_include_directories(sbox PRIVATE external/glm)
 target_include_directories(sbox PRIVATE src)
