@@ -1,4 +1,3 @@
 run:
-	meson setup build
-	meson compile -C build
-	./build/sbox
+	mkdir -p build && cd build && cmake .. && CXX=clang++ cmake --build .
+	
