@@ -24,7 +24,7 @@
       spdlog::error("{}:{} {} {}", __FILE__, __LINE__,                         \
                     string_VkResult(result##__LINE__), #expr);                 \
     } else if (result##__LINE__ > 0) {                                         \
-      spdlog::warn("{}:{} {} = {} ({})", __FILE__, __LINE__, #expr,            \
+      spdlog::warn("{}:{} {} = {}", __FILE__, __LINE__, #expr,            \
                    string_VkResult(result##__LINE__));                         \
     }                                                                          \
   }()
