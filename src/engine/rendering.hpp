@@ -313,7 +313,7 @@ struct RenderData {
   }
 
   void write_command_buffer(BootstrapInfo &bootstrap) {
-    VkCommandBufferAllocateInfo alloc_info;
+    VkCommandBufferAllocateInfo alloc_info = {};
     alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     alloc_info.commandPool = command_pool;
     alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
