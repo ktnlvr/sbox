@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.5 FATAL_ERROR)
 # TODO: fix the ImGUI dependency and provide it as a library
 set(IMGUI_SRC
     external/imgui/imgui.cpp
+    external/imgui/imgui_demo.cpp
     external/imgui/imgui_draw.cpp
     external/imgui/imgui_tables.cpp
     external/imgui/imgui_widgets.cpp

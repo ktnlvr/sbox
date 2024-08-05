@@ -18,8 +18,19 @@ int main(void) {
   render_data.init(bootstrap);
 
   while (!glfwWindowShouldClose(bootstrap.window)) {
-    render_data.draw_frame(bootstrap);
     glfwPollEvents();
+
+    ImGui_ImplVulkan_SetMinImageCount(
+        bootstrap.swapchain.requested_min_image_count);
+    ImGui_ImplVulkan_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+
+    ImGui::ShowDemoWindow();
+    ImGui::Render();
+    ImDrawData* draw_data = ImGui::GetDrawData();
+    render_data.write_command_buffer(bootstrap, draw_data);
+    render_data.draw_frame(bootstrap);
   }
 
   return 0;

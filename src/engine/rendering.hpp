@@ -317,7 +317,9 @@ struct RenderData {
                                                   &command_pool));
   }
 
-  void write_command_buffer(BootstrapInfo &bootstrap) {
+  void write_command_buffer(BootstrapInfo &bootstrap, ImDrawData* imgui_draw_data) {
+    // XXX: don't write ImGUI's data to each buffer every time 
+  
     VkCommandBufferAllocateInfo alloc_info = {};
     alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     alloc_info.commandPool = command_pool;
@@ -370,6 +372,8 @@ struct RenderData {
           command_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
       bootstrap.dispatch.cmdDraw(command_buffers[i], 3, 1, 0, 0);
+
+      ImGui_ImplVulkan_RenderDrawData(imgui_draw_data, command_buffers[i]);
 
       bootstrap.dispatch.cmdEndRenderPass(command_buffers[i]);
 
@@ -490,8 +494,6 @@ struct RenderData {
     init_frames_in_flight(bootstrap);
     init_command_pool(bootstrap);
     init_imgui(bootstrap);
-
-    write_command_buffer(bootstrap);
   }
 };
 
