@@ -1,5 +1,8 @@
 #pragma once
 
+#include <imgui/backends/imgui_impl_glfw.h>
+#include <imgui/backends/imgui_impl_vulkan.h>
+
 #include <vulkan/vulkan.h>
 
 #include <fstream>
@@ -56,6 +59,8 @@ struct RenderData {
   std::vector<FrameInFlight> frames_in_flight;
 
   size_t current_frame = 0;
+
+  VkDescriptorPool imgui_descriptor_pool;
 
   void init_queues(BootstrapInfo &bootstrap) {
     auto graphics_queue_ret =
@@ -326,7 +331,8 @@ struct RenderData {
     for (uint32_t i = 0; i < command_buffers.size(); i++) {
       VkCommandBufferBeginInfo begin_info = {};
       begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-      // XXX: fixes validation layers screaming when resizing, needs further investigation
+      // XXX: fixes validation layers screaming when resizing, needs further
+      // investigation
       begin_info.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
 
       CHECK_VK(bootstrap.dispatch.beginCommandBuffer(command_buffers[i],
@@ -385,9 +391,8 @@ struct RenderData {
         &image_index));
 
     if (frames[image_index].image_in_flight != VK_NULL_HANDLE) {
-      bootstrap.dispatch.waitForFences(
-          1, &frames[image_index].image_in_flight, VK_TRUE,
-          UINT64_MAX);
+      bootstrap.dispatch.waitForFences(1, &frames[image_index].image_in_flight,
+                                       VK_TRUE, UINT64_MAX);
     }
 
     frames[image_index].image_in_flight =
@@ -435,6 +440,48 @@ struct RenderData {
     current_frame = (current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
   }
 
+  void init_imgui(BootstrapInfo &bootstrap) {
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO &io = ImGui::GetIO();
+    (void)io;
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+
+    ImGui::StyleColorsDark();
+
+    VkDescriptorPoolSize pool_sizes[] = {
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1},
+    };
+
+    VkDescriptorPoolCreateInfo pool_info = {};
+    pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+    pool_info.maxSets = 1;
+    pool_info.poolSizeCount = (uint32_t)IM_ARRAYSIZE(pool_sizes);
+    pool_info.pPoolSizes = pool_sizes;
+    CHECK_VK(vkCreateDescriptorPool(bootstrap.device, &pool_info, NULL,
+                                    &imgui_descriptor_pool));
+
+    ImGui_ImplGlfw_InitForVulkan(bootstrap.window, true);
+    ImGui_ImplVulkan_InitInfo init_info = {};
+    init_info.Instance = bootstrap.instance;
+    init_info.PhysicalDevice = bootstrap.physical_device;
+    init_info.Device = bootstrap.device;
+    init_info.Queue = graphics_queue;
+    init_info.QueueFamily =
+        bootstrap.device.get_queue_index(vkb::QueueType::graphics).value();
+    init_info.PipelineCache = VK_NULL_HANDLE;
+    init_info.DescriptorPool = imgui_descriptor_pool;
+    init_info.RenderPass = render_pass;
+    init_info.Subpass = 0;
+    init_info.MinImageCount = bootstrap.swapchain.requested_min_image_count;
+    init_info.ImageCount = bootstrap.swapchain.image_count;
+    init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+    init_info.Allocator = nullptr;
+    init_info.CheckVkResultFn = nullptr;
+    ImGui_ImplVulkan_Init(&init_info);
+  }
+
   void init(BootstrapInfo &bootstrap) {
     init_queues(bootstrap);
     init_render_pass(bootstrap);
@@ -442,6 +489,7 @@ struct RenderData {
     init_frame_data(bootstrap);
     init_frames_in_flight(bootstrap);
     init_command_pool(bootstrap);
+    init_imgui(bootstrap);
 
     write_command_buffer(bootstrap);
   }

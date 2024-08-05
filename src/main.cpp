@@ -18,8 +18,8 @@ int main(void) {
   render_data.init(bootstrap);
 
   while (!glfwWindowShouldClose(bootstrap.window)) {
-    glfwPollEvents();
     render_data.draw_frame(bootstrap);
+    glfwPollEvents();
   }
 
   return 0;
