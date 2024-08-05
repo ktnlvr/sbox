@@ -65,18 +65,12 @@ struct RenderData {
   void init_queues(BootstrapInfo &bootstrap) {
     auto graphics_queue_ret =
         bootstrap.device.get_queue(vkb::QueueType::graphics);
-    if (!graphics_queue_ret) {
-      spdlog::error(graphics_queue_ret.error().message());
-      return;
-    }
+    CHECK(graphics_queue_ret);
     graphics_queue = graphics_queue_ret.value();
 
     auto present_queue_ret =
         bootstrap.device.get_queue(vkb::QueueType::present);
-    if (!present_queue_ret) {
-      spdlog::error(present_queue_ret.error().message());
-      return;
-    }
+    CHECK(present_queue_ret);
     present_queue = present_queue_ret.value();
   }
 
