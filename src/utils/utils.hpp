@@ -10,13 +10,15 @@
   }
 #define CHECK_VK(expr)                                                         \
   [&]() {                                                                      \
-    VkResult result = expr;                                                    \
-    if (result < 0) {                                                          \
+    VkResult result##__LINE__ = expr;                                          \
+    if (result##__LINE__ == VK_SUCCESS)                                        \
+      return;                                                                  \
+    if (result##__LINE__ < 0) {                                                \
       spdlog::error("{}:{} {} {}", __FILE__, __LINE__,                         \
-                    string_VkResult(result), #expr);                           \
-    } else if (result > 0) {                                                   \
+                    string_VkResult(result##__LINE__), #expr);                 \
+    } else if (result##__LINE__ > 0) {                                         \
       spdlog::warn("{}:{} {} = {} ({})", __FILE__, __LINE__, #expr,            \
-                   string_VkResult(result), result);                           \
+                   string_VkResult(result##__LINE__));                         \
     }                                                                          \
-  }();
+  }()
 #define ASSERT(expr, ...)
