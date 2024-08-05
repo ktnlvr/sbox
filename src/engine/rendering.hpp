@@ -31,7 +31,7 @@ VkShaderModule create_shader_module(BootstrapInfo &bootstrap,
   std::streamsize size = file.tellg();
   file.seekg(0, std::ios::beg);
   std::vector<char> buffer(size);
-  CHECK(file.read(buffer.data(), size));
+  CHECK(!file.read(buffer.data(), size).bad());
 
   VkShaderModuleCreateInfo create_info = {};
   create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -405,9 +405,9 @@ struct RenderData {
   }
 
   void draw_frame(BootstrapInfo &bootstrap) {
-    bootstrap.dispatch.waitForFences(
+    CHECK_VK(bootstrap.dispatch.waitForFences(
         1, &frames_in_flight[current_frame].in_flight_fence, VK_TRUE,
-        UINT64_MAX);
+        UINT64_MAX));
 
     uint32_t image_index = 0;
     VkResult result = bootstrap.dispatch.acquireNextImageKHR(
@@ -415,7 +415,7 @@ struct RenderData {
         frames_in_flight[current_frame].available_semaphore, VK_NULL_HANDLE,
         &image_index);
 
-    if (result == VK_ERROR_OUT_OF_DATE_KHR && result != VK_SUBOPTIMAL_KHR) {
+    if (result == VK_ERROR_OUT_OF_DATE_KHR) {
       recreate_swapchain(bootstrap);
       return;
     } else {
@@ -423,8 +423,8 @@ struct RenderData {
     }
 
     if (frames[image_index].image_in_flight != VK_NULL_HANDLE) {
-      bootstrap.dispatch.waitForFences(1, &frames[image_index].image_in_flight,
-                                       VK_TRUE, UINT64_MAX);
+      CHECK_VK(bootstrap.dispatch.waitForFences(
+          1, &frames[image_index].image_in_flight, VK_TRUE, UINT64_MAX));
     }
 
     frames[image_index].image_in_flight =
@@ -447,8 +447,8 @@ struct RenderData {
     submitInfo.pSignalSemaphores =
         &frames_in_flight[current_frame].finished_semaphore;
 
-    bootstrap.dispatch.resetFences(
-        1, &frames_in_flight[current_frame].in_flight_fence);
+    CHECK_VK(bootstrap.dispatch.resetFences(
+        1, &frames_in_flight[current_frame].in_flight_fence));
 
     CHECK_VK(bootstrap.dispatch.queueSubmit(
         graphics_queue, 1, &submitInfo,
@@ -472,6 +472,8 @@ struct RenderData {
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
       recreate_swapchain(bootstrap);
       return;
+    } else {
+      CHECK_VK(result);
     }
 
     current_frame = (current_frame + 1) % MAX_FRAMES_IN_FLIGHT;

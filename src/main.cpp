@@ -16,6 +16,7 @@ int main(void) {
 
   engine::RenderData render_data;
   render_data.init(bootstrap);
+  render_data.write_command_buffer(bootstrap, nullptr);
 
   while (!glfwWindowShouldClose(bootstrap.window)) {
     glfwPollEvents();
@@ -28,8 +29,7 @@ int main(void) {
 
     ImGui::ShowDemoWindow();
     ImGui::Render();
-    ImDrawData* draw_data = ImGui::GetDrawData();
-    render_data.write_command_buffer(bootstrap, draw_data);
+    ImDrawData *draw_data = ImGui::GetDrawData();
     render_data.draw_frame(bootstrap);
   }
 
