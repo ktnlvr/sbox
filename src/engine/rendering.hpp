@@ -428,11 +428,13 @@ struct RenderData {
         frames_in_flight[current_frame].available_semaphore, VK_NULL_HANDLE,
         &image_index);
 
-    if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-      recreate_swapchain(bootstrap);
-      return;
-    } else {
-      CHECK_VK(result);
+    if (result != VK_SUBOPTIMAL_KHR) {
+      if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+        recreate_swapchain(bootstrap);
+        return;
+      } else {
+        CHECK_VK(result);
+      }
     }
 
     if (frames[image_index].image_in_flight != VK_NULL_HANDLE) {
