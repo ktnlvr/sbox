@@ -423,6 +423,52 @@ struct RenderData {
     write_command_buffer(bootstrap);
   }
 
+  VkCommandBuffer create_imgui_command_buffer(BootstrapInfo &bootstrap,
+                                              uint32_t image_index) {
+    // Setup the newly allocated
+    VkCommandBuffer command_buffer;
+    VkCommandBufferAllocateInfo alloc_command_buffer_info = {};
+    alloc_command_buffer_info.sType =
+        VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    alloc_command_buffer_info.commandBufferCount = 1;
+    alloc_command_buffer_info.commandPool = command_pool;
+    alloc_command_buffer_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    CHECK_VK(bootstrap.dispatch.allocateCommandBuffers(
+        &alloc_command_buffer_info, &command_buffer));
+
+    VkRenderPassBeginInfo render_pass_info = {};
+    render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    render_pass_info.renderPass = render_pass;
+    render_pass_info.framebuffer = frames[image_index].framebuffer;
+    render_pass_info.renderArea.extent.width =
+        bootstrap.swapchain.extent.width;
+    render_pass_info.renderArea.extent.height =
+        bootstrap.swapchain.extent.height;
+    VkClearValue clearColor{{{0.0f, 0.0f, 0.0f, 0.0f}}};
+    render_pass_info.clearValueCount = 1;
+    render_pass_info.pClearValues = &clearColor;
+
+    VkCommandBufferBeginInfo command_buffer_begin = {};
+    command_buffer_begin.sType =
+        VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    command_buffer_begin.flags =
+        VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    CHECK_VK(bootstrap.dispatch.beginCommandBuffer(
+        command_buffer, &command_buffer_begin));
+
+    bootstrap.dispatch.cmdBeginRenderPass(command_buffer,
+                                          &render_pass_info,
+                                          VK_SUBPASS_CONTENTS_INLINE);
+    ImGui::Render();
+    ImDrawData *draw_data = ImGui::GetDrawData();
+    ImGui_ImplVulkan_RenderDrawData(draw_data, command_buffer);
+    bootstrap.dispatch.cmdEndRenderPass(command_buffer);
+
+    CHECK_VK(bootstrap.dispatch.endCommandBuffer(command_buffer));
+
+    return command_buffer;
+  }
+
   void draw_frame(BootstrapInfo &bootstrap) {
     CHECK_VK(bootstrap.dispatch.waitForFences(
         1, &frames_in_flight[current_frame].in_flight_fence, VK_TRUE,
@@ -451,11 +497,26 @@ struct RenderData {
     frames[image_index].image_in_flight =
         frames_in_flight[current_frame].in_flight_fence;
 
-    VkSubmitInfo submit_info = {};
-    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    CHECK_VK(bootstrap.dispatch.resetFences(
+        1, &frames_in_flight[current_frame].in_flight_fence));
+
+    // Reset the old per-frame command buffer, ready for rerecording
+    CHECK_VK(bootstrap.dispatch.resetCommandPool(
+        frames_in_flight[current_frame].per_frame_command_pool,
+        VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT));
+
+    VkCommandBuffer imgui_command_buffer =
+        create_imgui_command_buffer(bootstrap, image_index);
+
+    VkCommandBuffer command_buffers[2] = {frames[image_index].command_buffer,
+                                          imgui_command_buffer};
 
     VkPipelineStageFlags wait_stages[] = {
         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+
+    VkSubmitInfo submit_info = {};
+    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
     submit_info.waitSemaphoreCount = 1;
     submit_info.pWaitSemaphores =
         &frames_in_flight[current_frame].available_semaphore;
@@ -464,55 +525,6 @@ struct RenderData {
     submit_info.signalSemaphoreCount = 1;
     submit_info.pSignalSemaphores =
         &frames_in_flight[current_frame].finished_semaphore;
-
-    CHECK_VK(bootstrap.dispatch.resetFences(
-        1, &frames_in_flight[current_frame].in_flight_fence));
-
-    CHECK_VK(bootstrap.dispatch.resetCommandPool(
-        frames_in_flight[current_frame].per_frame_command_pool,
-        VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT));
-
-    VkCommandBuffer imgui_command_buffer;
-    VkCommandBufferAllocateInfo alloc_command_buffer_info = {};
-    alloc_command_buffer_info.sType =
-        VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    alloc_command_buffer_info.commandBufferCount = 1;
-    alloc_command_buffer_info.commandPool = command_pool;
-    alloc_command_buffer_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    CHECK_VK(bootstrap.dispatch.allocateCommandBuffers(
-        &alloc_command_buffer_info, &imgui_command_buffer));
-
-    VkRenderPassBeginInfo imgui_render_pass_info = {};
-    imgui_render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    imgui_render_pass_info.renderPass = render_pass;
-    imgui_render_pass_info.framebuffer = frames[image_index].framebuffer;
-    imgui_render_pass_info.renderArea.extent.width =
-        bootstrap.swapchain.extent.width;
-    imgui_render_pass_info.renderArea.extent.height =
-        bootstrap.swapchain.extent.height;
-    VkClearValue clearColor{{{0.0f, 0.0f, 0.0f, 1.0f}}};
-    imgui_render_pass_info.clearValueCount = 1;
-    imgui_render_pass_info.pClearValues = &clearColor;
-
-    VkCommandBufferBeginInfo imgui_command_buffer_begin = {};
-    imgui_command_buffer_begin.sType =
-        VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    imgui_command_buffer_begin.flags =
-        VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    CHECK_VK(bootstrap.dispatch.beginCommandBuffer(
-        imgui_command_buffer, &imgui_command_buffer_begin));
-
-    bootstrap.dispatch.cmdBeginRenderPass(imgui_command_buffer,
-                                          &imgui_render_pass_info,
-                                          VK_SUBPASS_CONTENTS_INLINE);
-    ImGui::Render();
-    ImDrawData *draw_data = ImGui::GetDrawData();
-    ImGui_ImplVulkan_RenderDrawData(draw_data, imgui_command_buffer);
-    bootstrap.dispatch.cmdEndRenderPass(imgui_command_buffer);
-    CHECK_VK(bootstrap.dispatch.endCommandBuffer(imgui_command_buffer));
-
-    VkCommandBuffer command_buffers[2] = {frames[image_index].command_buffer,
-                                          imgui_command_buffer};
 
     submit_info.commandBufferCount = 2;
     submit_info.pCommandBuffers = command_buffers;
