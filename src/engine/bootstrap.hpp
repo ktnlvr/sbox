@@ -51,10 +51,10 @@ struct BootstrapInfo {
 
   VkSurfaceKHR create_surface() {
     CHECK_REPORT_STR(instance != VK_NULL_HANDLE,
-           "The instance has not been initialized yet. Try initializing the "
-           "instance before surface creation");
+        "The instance has not been initialized yet. Try initializing the "
+        "instance before surface creation");
     CHECK_REPORT_STR(window != nullptr, "The window has not been created yet. Did GLFW "
-                              "return an error upon window creation?");
+                     "return an error upon window creation?");
 
     // TODO: check that instance and swapchain are correct
     VkSurfaceKHR surface = VK_NULL_HANDLE;
@@ -119,7 +119,11 @@ struct BootstrapInfo {
 
   void init_swapchain() {
     vkb::SwapchainBuilder swapchain_builder(device);
-    auto swapchain_ret = swapchain_builder.set_old_swapchain(swapchain).build();
+    // TODO: select at runtime/compile time
+    auto swapchain_ret =
+        swapchain_builder.set_old_swapchain(swapchain)
+            .set_desired_present_mode(VK_PRESENT_MODE_IMMEDIATE_KHR)
+            .build();
     CHECK(swapchain_ret);
     vkb::destroy_swapchain(swapchain);
     swapchain = swapchain_ret.value();
