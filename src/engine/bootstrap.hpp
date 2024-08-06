@@ -156,10 +156,8 @@ struct BootstrapInfo {
         dispatch.createCommandPool(&pool_info, NULL, &immediate_command_pool));
   }
 
-  // TODO: accept any callable
-  void submit_immediate_command_buffer(
-      vkb::QueueType queue_type,
-      std::function<VkResult(VkCommandBuffer)> record) {
+  template <typename F>
+  void submit_immediate_command_buffer(vkb::QueueType queue_type, F record) {
     VkCommandBufferAllocateInfo command_buffer_alloc_info = {};
     command_buffer_alloc_info.sType =
         VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
