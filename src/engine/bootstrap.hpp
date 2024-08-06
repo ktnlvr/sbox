@@ -5,6 +5,9 @@
 #include <VkBootstrap.h>
 #include <spdlog/spdlog.h>
 
+#define VMA_IMPLEMENTATION
+#include <vk_mem_alloc.h>
+
 #include "utils/utils.hpp"
 
 namespace b {
@@ -44,6 +47,7 @@ struct BootstrapInfo {
   vkb::Device device;
   vkb::DispatchTable dispatch;
   vkb::Swapchain swapchain;
+  VmaAllocator allocator;
 
   VkSurfaceKHR create_surface() {
     CHECK_REPORT_STR(instance != VK_NULL_HANDLE,
@@ -121,6 +125,17 @@ struct BootstrapInfo {
     swapchain = swapchain_ret.value();
   }
 
+  void init_memory() {
+    VmaAllocatorCreateInfo allocator_info = {};
+    allocator_info.flags = VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT;
+    allocator_info.vulkanApiVersion = VK_API_VERSION_1_2;
+    allocator_info.instance = instance;
+    allocator_info.device = device;
+    allocator_info.physicalDevice = physical_device;
+
+    CHECK_VK(vmaCreateAllocator(&allocator_info, &allocator));
+  }
+
   uint32_t find_memory(uint32_t type_filter, VkMemoryPropertyFlags properties) {
     auto mem = physical_device.memory_properties;
     for (size_t i = 0; i < mem.memoryTypeCount; i++) {
@@ -138,6 +153,7 @@ struct BootstrapInfo {
   void init() {
     init_device();
     init_swapchain();
+    init_memory();
   }
 };
 
