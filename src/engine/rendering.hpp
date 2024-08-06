@@ -27,6 +27,7 @@ struct FrameData {
 struct FrameInFlight {
   VkSemaphore available_semaphore, finished_semaphore;
   VkFence in_flight_fence;
+  VkCommandPool per_frame_command_pool;
 };
 
 VkShaderModule create_shader_module(BootstrapInfo &bootstrap,
@@ -300,6 +301,13 @@ struct RenderData {
     fence_create.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
     fence_create.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
+    VkCommandPoolCreateInfo pool_create_info = {};
+    pool_create_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    // TODO: check this
+    pool_create_info.queueFamilyIndex =
+        bootstrap.device.get_queue_index(vkb::QueueType::graphics).value();
+    pool_create_info.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+
     for (size_t i = 0; i < frames_in_flight.size(); i++) {
       FrameInFlight finf;
 
@@ -309,6 +317,8 @@ struct RenderData {
                                                   &finf.available_semaphore));
       CHECK_VK(bootstrap.dispatch.createFence(&fence_create, NULL,
                                               &finf.in_flight_fence));
+      CHECK_VK(bootstrap.dispatch.createCommandPool(
+          &pool_create_info, NULL, &finf.per_frame_command_pool));
 
       frames_in_flight[i] = finf;
     }
@@ -324,10 +334,7 @@ struct RenderData {
                                                   &command_pool));
   }
 
-  void write_command_buffer(BootstrapInfo &bootstrap,
-                            ImDrawData *imgui_draw_data = nullptr) {
-    // XXX: don't write ImGUI's data to each buffer every time
-
+  void write_command_buffer(BootstrapInfo &bootstrap) {
     VkCommandBufferAllocateInfo alloc_info = {};
     alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     alloc_info.commandPool = command_pool;
@@ -387,11 +394,8 @@ struct RenderData {
       bootstrap.dispatch.cmdBindIndexBuffer(
           command_buffers[i], mesh->index_buffer, 0, VK_INDEX_TYPE_UINT32);
 
-      bootstrap.dispatch.cmdDrawIndexed(command_buffers[i], INDICES.size(), 1, 0, 0, 0);
-
-      // TODO: fix imgui
-      if (false)
-        ImGui_ImplVulkan_RenderDrawData(imgui_draw_data, command_buffers[i]);
+      bootstrap.dispatch.cmdDrawIndexed(command_buffers[i], INDICES.size(), 1,
+                                        0, 0, 0);
 
       bootstrap.dispatch.cmdEndRenderPass(command_buffers[i]);
 
@@ -457,15 +461,61 @@ struct RenderData {
         &frames_in_flight[current_frame].available_semaphore;
     submit_info.pWaitDstStageMask = wait_stages;
 
-    submit_info.commandBufferCount = 1;
-    submit_info.pCommandBuffers = &frames[image_index].command_buffer;
-
     submit_info.signalSemaphoreCount = 1;
     submit_info.pSignalSemaphores =
         &frames_in_flight[current_frame].finished_semaphore;
 
     CHECK_VK(bootstrap.dispatch.resetFences(
         1, &frames_in_flight[current_frame].in_flight_fence));
+
+    CHECK_VK(bootstrap.dispatch.resetCommandPool(
+        frames_in_flight[current_frame].per_frame_command_pool,
+        VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT));
+
+    VkCommandBuffer imgui_command_buffer;
+    VkCommandBufferAllocateInfo alloc_command_buffer_info = {};
+    alloc_command_buffer_info.sType =
+        VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    alloc_command_buffer_info.commandBufferCount = 1;
+    alloc_command_buffer_info.commandPool = command_pool;
+    alloc_command_buffer_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    CHECK_VK(bootstrap.dispatch.allocateCommandBuffers(
+        &alloc_command_buffer_info, &imgui_command_buffer));
+
+    VkRenderPassBeginInfo imgui_render_pass_info = {};
+    imgui_render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    imgui_render_pass_info.renderPass = render_pass;
+    imgui_render_pass_info.framebuffer = frames[image_index].framebuffer;
+    imgui_render_pass_info.renderArea.extent.width =
+        bootstrap.swapchain.extent.width;
+    imgui_render_pass_info.renderArea.extent.height =
+        bootstrap.swapchain.extent.height;
+    VkClearValue clearColor{{{0.0f, 0.0f, 0.0f, 1.0f}}};
+    imgui_render_pass_info.clearValueCount = 1;
+    imgui_render_pass_info.pClearValues = &clearColor;
+
+    VkCommandBufferBeginInfo imgui_command_buffer_begin = {};
+    imgui_command_buffer_begin.sType =
+        VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    imgui_command_buffer_begin.flags =
+        VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    CHECK_VK(bootstrap.dispatch.beginCommandBuffer(
+        imgui_command_buffer, &imgui_command_buffer_begin));
+
+    bootstrap.dispatch.cmdBeginRenderPass(imgui_command_buffer,
+                                          &imgui_render_pass_info,
+                                          VK_SUBPASS_CONTENTS_INLINE);
+    ImGui::Render();
+    ImDrawData *draw_data = ImGui::GetDrawData();
+    ImGui_ImplVulkan_RenderDrawData(draw_data, imgui_command_buffer);
+    bootstrap.dispatch.cmdEndRenderPass(imgui_command_buffer);
+    CHECK_VK(bootstrap.dispatch.endCommandBuffer(imgui_command_buffer));
+
+    VkCommandBuffer command_buffers[2] = {frames[image_index].command_buffer,
+                                          imgui_command_buffer};
+
+    submit_info.commandBufferCount = 2;
+    submit_info.pCommandBuffers = command_buffers;
 
     CHECK_VK(bootstrap.dispatch.queueSubmit(
         graphics_queue, 1, &submit_info,

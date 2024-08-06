@@ -25,7 +25,7 @@ int main(void) {
       std::vector(engine::INDICES.cbegin(), engine::INDICES.cend()));
   engine::mesh = &mesh;
 
-  render_data.write_command_buffer(bootstrap, nullptr);
+  render_data.write_command_buffer(bootstrap);
 
   while (!glfwWindowShouldClose(bootstrap.window)) {
     glfwPollEvents();
@@ -37,8 +37,7 @@ int main(void) {
     ImGui::NewFrame();
 
     ImGui::ShowDemoWindow();
-    ImGui::Render();
-    ImDrawData *draw_data = ImGui::GetDrawData();
+
     render_data.draw_frame(bootstrap);
   }
 
