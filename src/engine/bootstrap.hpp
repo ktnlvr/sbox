@@ -79,7 +79,6 @@ struct BootstrapInfo {
                VkDebugUtilsMessageTypeFlagsEXT _messageType,
                const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
                void *_pUserData) -> VkBool32 {
-              // TODO: propert severity handling
               if (messageSeverity ==
                   VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
                 spdlog::warn(pCallbackData->pMessage);
