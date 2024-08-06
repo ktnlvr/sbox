@@ -30,9 +30,8 @@ void GLFWwindow_show(GLFWwindow *window) { glfwShowWindow(window); }
 int GLFW_check_error() {
   const char *err_message = nullptr;
   int ret = glfwGetError(&err_message);
-  if (!ret) {
-    spdlog::error("GLFW Error {}: ", ret, err_message);
-    // TODO: possibly free the err_message?
+  if (err_message) {
+    CHECK_REPORT_FMT(ret, "{}", err_message);
   }
 
   return ret;
@@ -58,13 +57,11 @@ struct BootstrapInfo {
     CHECK_REPORT_STR(window != nullptr,
                      "The window has not been created yet. Did GLFW "
                      "return an error upon window creation?");
+    CHECK(instance);
 
-    // TODO: check that instance and swapchain are correct
     VkSurfaceKHR surface = VK_NULL_HANDLE;
-    VkResult result = glfwCreateWindowSurface(instance, window, NULL, &surface);
-    if (result) {
-      CHECK(GLFW_check_error());
-    }
+    int result = glfwCreateWindowSurface(instance, window, NULL, &surface);
+    GLFW_check_error();
 
     return surface;
   }
