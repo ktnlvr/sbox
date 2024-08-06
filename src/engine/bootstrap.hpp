@@ -50,10 +50,12 @@ struct BootstrapInfo {
   VmaAllocator allocator;
 
   VkSurfaceKHR create_surface() {
-    CHECK_REPORT_STR(instance != VK_NULL_HANDLE,
+    CHECK_REPORT_STR(
+        instance != VK_NULL_HANDLE,
         "The instance has not been initialized yet. Try initializing the "
         "instance before surface creation");
-    CHECK_REPORT_STR(window != nullptr, "The window has not been created yet. Did GLFW "
+    CHECK_REPORT_STR(window != nullptr,
+                     "The window has not been created yet. Did GLFW "
                      "return an error upon window creation?");
 
     // TODO: check that instance and swapchain are correct
