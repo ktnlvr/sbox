@@ -136,20 +136,6 @@ struct BootstrapInfo {
     CHECK_VK(vmaCreateAllocator(&allocator_info, &allocator));
   }
 
-  uint32_t find_memory(uint32_t type_filter, VkMemoryPropertyFlags properties) {
-    auto mem = physical_device.memory_properties;
-    for (size_t i = 0; i < mem.memoryTypeCount; i++) {
-      // MAGIC: check the docs
-      if ((type_filter & (1 << i)) &&
-          ((mem.memoryTypes[i].propertyFlags & properties) == properties)) {
-        return i;
-      }
-    }
-
-    PANIC("Requested memory type not found");
-    return -1;
-  }
-
   void init() {
     init_device();
     init_swapchain();
