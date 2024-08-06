@@ -13,9 +13,10 @@ struct Vertex {
     glm::vec3 color;
 
     static VkVertexInputBindingDescription binding_description() {
-        VkVertexInputBindingDescription description;
+        VkVertexInputBindingDescription description = {};
         description.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
         description.stride = sizeof(Vertex);
+        description.binding = 0;
 
         return description;
     }
