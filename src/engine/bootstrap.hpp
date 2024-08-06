@@ -48,6 +48,7 @@ struct BootstrapInfo {
   vkb::DispatchTable dispatch;
   vkb::Swapchain swapchain;
   VmaAllocator allocator;
+  VkCommandPool immediate_command_pool;
 
   VkSurfaceKHR create_surface() {
     CHECK_REPORT_STR(
@@ -142,10 +143,64 @@ struct BootstrapInfo {
     CHECK_VK(vmaCreateAllocator(&allocator_info, &allocator));
   }
 
+  void init_immediate_command_pool() {
+    CHECK(device);
+
+    auto present_queue_ret = device.get_queue_index(vkb::QueueType::graphics);
+    CHECK(present_queue_ret);
+
+    VkCommandPoolCreateInfo pool_info = {};
+    pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    pool_info.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+    pool_info.queueFamilyIndex = present_queue_ret.value();
+
+    CHECK_VK(
+        dispatch.createCommandPool(&pool_info, NULL, &immediate_command_pool));
+  }
+
+  // TODO: accept any callable
+  void submit_immediate_command_buffer(
+      vkb::QueueType queue_type,
+      std::function<VkResult(VkCommandBuffer)> record) {
+    VkCommandBufferAllocateInfo command_buffer_alloc_info = {};
+    command_buffer_alloc_info.sType =
+        VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    command_buffer_alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    command_buffer_alloc_info.commandPool = immediate_command_pool;
+    command_buffer_alloc_info.commandBufferCount = 1;
+
+    VkCommandBuffer command_buffer;
+    CHECK_VK(dispatch.allocateCommandBuffers(&command_buffer_alloc_info,
+                                             &command_buffer));
+
+    VkCommandBufferBeginInfo begin_info = {};
+    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    CHECK_VK(dispatch.beginCommandBuffer(command_buffer, &begin_info));
+
+    CHECK_VK(record(command_buffer));
+
+    CHECK_VK(dispatch.endCommandBuffer(command_buffer));
+
+    VkSubmitInfo submit_info{};
+    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submit_info.commandBufferCount = 1;
+    submit_info.pCommandBuffers = &command_buffer;
+
+    auto queue_ret = device.get_queue(queue_type);
+    // TODO: error check this
+    auto queue = queue_ret.value();
+
+    vkQueueSubmit(queue, 1, &submit_info, VK_NULL_HANDLE);
+    vkQueueWaitIdle(queue);
+  }
+
   void init() {
     init_device();
     init_swapchain();
     init_memory();
+    init_immediate_command_pool();
   }
 };
 
