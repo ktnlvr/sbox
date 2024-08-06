@@ -14,7 +14,7 @@
 
 namespace b::engine {
 
-static Mesh* mesh;
+static Mesh *mesh;
 
 struct FrameData {
   VkImage swapchain_image;
@@ -381,10 +381,13 @@ struct RenderData {
 
       VkBuffer vertex_buffers[] = {mesh->vert_buffer};
       VkDeviceSize offsets[] = {0};
+      VkBuffer index_buffers[] = {mesh->index_buffer};
       bootstrap.dispatch.cmdBindVertexBuffers(command_buffers[i], 0, 1,
                                               vertex_buffers, offsets);
+      bootstrap.dispatch.cmdBindIndexBuffer(
+          command_buffers[i], mesh->index_buffer, 0, VK_INDEX_TYPE_UINT32);
 
-      bootstrap.dispatch.cmdDraw(command_buffers[i], 3, 1, 0, 0);
+      bootstrap.dispatch.cmdDrawIndexed(command_buffers[i], INDICES.size(), 1, 0, 0, 0);
 
       // TODO: fix imgui
       if (false)

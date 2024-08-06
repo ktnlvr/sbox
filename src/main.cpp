@@ -19,9 +19,10 @@ int main(void) {
   render_data.init(bootstrap);
 
   engine::Library library;
-  auto mesh =
-      library.add_mesh(bootstrap, std::vector(engine::TRIANGLE_VERTS.cbegin(),
-                                              engine::TRIANGLE_VERTS.cend()));
+  auto mesh = library.add_mesh(
+      bootstrap,
+      std::vector(engine::VERTICES.cbegin(), engine::VERTICES.cend()),
+      std::vector(engine::INDICES.cbegin(), engine::INDICES.cend()));
   engine::mesh = &mesh;
 
   render_data.write_command_buffer(bootstrap, nullptr);
