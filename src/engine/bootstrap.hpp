@@ -106,11 +106,13 @@ struct BootstrapInfo {
     surface = create_surface();
 
     vkb::PhysicalDeviceSelector physical_device_selector(instance);
-    auto physical_device_ret =
-        physical_device_selector.set_surface(surface).select(
-            vkb::DeviceSelectionMode::only_fully_suitable);
+    auto physical_device_ret = physical_device_selector.set_surface(surface)
+                                   .prefer_gpu_device_type()
+                                   .allow_any_gpu_device_type(false)
+                                   .select();
     CHECK(physical_device_ret);
     physical_device = physical_device_ret.value();
+    spdlog::info("Using {}", physical_device.name);
 
     vkb::DeviceBuilder device_builder(physical_device);
     auto device_ret = device_builder.build();
