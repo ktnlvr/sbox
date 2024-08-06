@@ -5,13 +5,19 @@
 
 #define CHECK(expr)                                                            \
   if (!(expr)) {                                                               \
-    spdlog::error("{}:{} {}", __FILE__, __LINE__, #expr);                      \
+    spdlog::error("{}:{} ({})", __FILE__, __LINE__, #expr);                    \
     exit(-2);                                                                  \
   }
 
-#define CHECK_FMT(expr, ...)                                                   \
+#define CHECK_REPORT_STR(expr, msg)                                            \
   if (!(expr)) {                                                               \
-    spdlog::error("{}:{} {}", __FILE__, __LINE__, #expr);                      \
+    spdlog::error("{}:{} ({})" msg, __FILE__, __LINE__, #expr);                \
+    exit(-2);                                                                  \
+  }
+
+#define CHECK_REPORT_FMT(expr, msg, ...)                                       \
+  if (!(expr)) {                                                               \
+    spdlog::error("{}:{} ({}) " msg, __FILE__, __LINE__, #expr, __VA_ARGS__);  \
     exit(-2);                                                                  \
   }
 
@@ -21,10 +27,10 @@
     if (result##__LINE__ == VK_SUCCESS)                                        \
       return;                                                                  \
     if (result##__LINE__ < 0) {                                                \
-      spdlog::error("{}:{} {} {}", __FILE__, __LINE__,                         \
+      spdlog::error("{}:{} ({}) = {}", __FILE__, __LINE__,                     \
                     string_VkResult(result##__LINE__), #expr);                 \
     } else if (result##__LINE__ > 0) {                                         \
-      spdlog::warn("{}:{} {} = {}", __FILE__, __LINE__, #expr,            \
+      spdlog::warn("{}:{} ({}) = {}", __FILE__, __LINE__, #expr,               \
                    string_VkResult(result##__LINE__));                         \
     }                                                                          \
   }()

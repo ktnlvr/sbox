@@ -32,6 +32,7 @@ struct FrameInFlight {
 VkShaderModule create_shader_module(BootstrapInfo &bootstrap,
                                     const char *filename) {
   std::ifstream file(filename, std::ios::binary | std::ios::ate);
+  CHECK_REPORT_FMT(file, "Failed to open the file {}", filename);
   std::streamsize size = file.tellg();
   file.seekg(0, std::ios::beg);
   std::vector<char> buffer(size);
